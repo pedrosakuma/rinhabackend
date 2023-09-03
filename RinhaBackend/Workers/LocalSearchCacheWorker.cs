@@ -1,21 +1,18 @@
 ﻿using RinhaBackend.Models;
 using RinhaBackend.Repositories;
-using System.Text.Json;
 using System.Threading.Channels;
 
 namespace RinhaBackend.Workers
 {
-    public class LocalCacheWorker : BackgroundService
+    public class LocalSearchCacheWorker : BackgroundService
     {
         private readonly Channel<Pessoa> channel;
         private readonly PessoasCacheRepository pessoasCacheRepository;
-        private readonly AppJsonSerializerContext jsonSerializerContext;
 
-        public LocalCacheWorker(LocalPessoasChannel channel, PessoasCacheRepository pessoasCacheRepository, AppJsonSerializerContext jsonSerializerContext)
+        public LocalSearchCacheWorker(LocalSearchPessoasChannel channel, PessoasCacheRepository pessoasCacheRepository)
         {
             this.channel = channel.Channel;
             this.pessoasCacheRepository = pessoasCacheRepository;
-            this.jsonSerializerContext = jsonSerializerContext;
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
@@ -26,8 +23,7 @@ namespace RinhaBackend.Workers
                 {
                     var pessoa = await reader.ReadAsync(stoppingToken);
                     if (pessoa != null)
-                        pessoasCacheRepository.Add(pessoa,
-                            JsonSerializer.SerializeToUtf8Bytes(pessoa, jsonSerializerContext.Pessoa));
+                        pessoasCacheRepository.AddSearch(pessoa);
                 }
             }
         }

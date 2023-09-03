@@ -1,10 +1,10 @@
 using Microsoft.AspNetCore.Mvc;
+using RinhaBackend.Grpc;
 using RinhaBackend.Models;
 using RinhaBackend.Repositories;
+using RinhaBackend.Services;
 using RinhaBackend.Workers;
-using StackExchange.Redis;
-using System.ComponentModel.DataAnnotations;
-using System.Text.Json;
+using System.Threading.Channels;
 
 namespace RinhaBackend
 {
@@ -12,85 +12,104 @@ namespace RinhaBackend
     {
         public static async Task Main(string[] args)
         {
-            var builder = WebApplication.CreateBuilder(args);
+            var builder = WebApplication.CreateSlimBuilder(args);
+            //ThreadPool.SetMinThreads(1024, 1024);
+            builder.WebHost.UseKestrelHttpsConfiguration();
 
-            // Add services to the container.
-            //builder.Services.AddAuthorization();
+            builder.Services.AddGrpc();
             builder.Services.AddNpgsqlDataSource(builder.Configuration["DB_CONNECTION_STRING"]);
-            builder.Services.AddSingleton(s => ConnectionMultiplexer.Connect(builder.Configuration["CACHE_CONNECTION_STRING"]));
-            builder.Services.AddSingleton<PessoasCacheRepository>();
+            builder.Services.ConfigureHttpJsonOptions(options =>
+            {
+                options.SerializerOptions.TypeInfoResolverChain.Insert(0, AppJsonSerializerContext.Default);
+            });
 
-            // Learn more about configuring Swagger/OpenAPI at https://aka.ms/aspnetcore/swashbuckle
-            builder.Services.AddEndpointsApiExplorer();
-            builder.Services.AddSwaggerGen();
-            builder.Services.AddResponseCompression();
+            builder.Services.AddGrpcClient<Pessoas.PessoasClient>(o =>
+            {
+                o.Address = new Uri(builder.Configuration["GRPC_CHANNEL"]);
+            })
+            .ConfigurePrimaryHttpMessageHandler(() =>
+            {
+                var handler = new HttpClientHandler();
+                handler.ServerCertificateCustomValidationCallback =
+                    HttpClientHandler.DangerousAcceptAnyServerCertificateValidator;
+
+                return handler;
+            });
+            builder.Services.AddSingleton<GrpcPessoasService>();
+            builder.Services.AddSingleton<PessoasCacheRepository>();
+            builder.Services.AddSingleton(s => AppJsonSerializerContext.Default);
+            builder.Services.AddSingleton((s) => new PersistencePessoasChannel(Channel.CreateUnbounded<Pessoa>(new UnboundedChannelOptions
+            {
+                SingleReader = true
+            })));
+            builder.Services.AddSingleton((s) => new LocalPessoasChannel(Channel.CreateUnbounded<Pessoa>(new UnboundedChannelOptions
+            {
+                SingleReader = true
+            })));
+            builder.Services.AddSingleton((s) => new LocalSearchPessoasChannel(Channel.CreateUnbounded<Pessoa>(new UnboundedChannelOptions
+            {
+                SingleReader = true
+            })));
 
             builder.Services.AddHostedService<LocalCacheWorker>();
+            builder.Services.AddHostedService<LocalSearchCacheWorker>();
             builder.Services.AddHostedService<PersistenceWorker>();
+            builder.Services.AddHostedService<RemoteCacheWorker>();
 
             var app = builder.Build();
 
-            app.UseResponseCompression();
-            //app.UseResponseCaching();
-            // Configure the HTTP request pipeline.
-            if (app.Environment.IsDevelopment())
+            app.MapGrpcService<GrpcPessoasService>();
+            app.MapGet("/pessoas/{id}", static async (
+                [FromServices] PessoasCacheRepository cacheRepository, 
+                [FromRoute] Guid id) =>
             {
-                app.UseSwagger();
-                app.UseSwaggerUI();
-            }
-
-            //app.UseAuthorization();
-            // Configure the HTTP request pipeline.
-            app.MapGet("/pessoas/{id}", async ([FromServices] ConnectionMultiplexer connection, [FromServices] PessoasCacheRepository cacheRepository, Guid id) =>
-            {
-                if (cacheRepository.TryGetValue(id, out byte[] pessoaJson))
-                    return Results.Bytes(pessoaJson, "application/json");
-
-                var database = connection.GetDatabase();
-                var cached = await database.StringGetAsync($"Pessoas{id}");
-                if (!cached.IsNull)
-                    return Results.Bytes(cached, "application/json");
-                return Results.NotFound();
+                byte[]? pessoaJson = await cacheRepository.GetValueAsync(id, TimeSpan.FromMilliseconds(200));
+                if (pessoaJson == null)
+                    return Results.NotFound();
+                return Results.Bytes(pessoaJson, "application/json");
             })
-            .WithName("GetPessoaById")
-            .WithOpenApi();
+            .WithName("GetPessoaById");
 
-            app.MapGet("/pessoas", async ([FromServices] PessoasCacheRepository cacheRepository, [Required] string t) =>
+            app.MapGet("/pessoas", static (
+                [FromServices] PessoasCacheRepository cacheRepository, 
+                [FromQuery] string? t) =>
             {
-                return cacheRepository.Search(t);
+                if (t == null)
+                    return Results.BadRequest();
+                return Results.Ok(cacheRepository.Search(t));
             })
-            .WithName("GetPessoas")
-            .WithOpenApi();
+            .WithName("GetPessoas");
 
-            app.MapGet("/contagem-pessoas", ([FromServices] PessoasCacheRepository cacheRepository) =>
+            app.MapGet("/contagem-pessoas", static (
+                [FromServices] PessoasCacheRepository cacheRepository) =>
             {
                 return cacheRepository.Count();
             })
-            .WithName("GetContagemPessoas")
-            .WithOpenApi();
+            .WithName("GetContagemPessoas");
 
-            app.MapPost("/pessoas", async ([FromServices]ConnectionMultiplexer connection, [FromServices] PessoasCacheRepository cacheRepository, CreateRequestPessoa pessoa) =>
+            app.MapPost("/pessoas", static async (
+                [FromServices] LocalPessoasChannel localChannel,
+                [FromServices] LocalSearchPessoasChannel localSearchChannel,
+                [FromServices] PersistencePessoasChannel persistenceChannel, 
+                [FromServices] PessoasCacheRepository cacheRepository, 
+                [FromBody] CreateRequestPessoa pessoa) =>
             {
-                if (cacheRepository.Exists(pessoa.Apelido))
+                string[]? stack = null;
+                if (!DateOnly.TryParseExact(pessoa.Nascimento, "yyyy-MM-dd", out DateOnly nascimento)
+                || (pessoa.Stack != null && !pessoa.Stack.TryGetValue(out stack))
+                || cacheRepository.Exists(pessoa.Apelido))
                     return Results.UnprocessableEntity();
 
                 var id = Guid.NewGuid();
-                var database = connection.GetDatabase();
-                var p = new Pessoa(id, pessoa.Apelido, pessoa.Nome, pessoa.Nascimento, pessoa.Stack ?? Array.Empty<string>());
-                var rawData = JsonSerializer.SerializeToUtf8Bytes(p);
-                await database.StreamAddAsync("PessoasStream", "Raw",
-                    rawData, 
-                    flags: CommandFlags.FireAndForget);
-                await database.StringSetAsync($"Pessoa{id}", rawData, flags: CommandFlags.FireAndForget);
-                await database.PublishAsync(
-                    new RedisChannel("PessoasChannel", RedisChannel.PatternMode.Literal),
-                    rawData,
-                    CommandFlags.FireAndForget);
+                var p = new Pessoa(id, pessoa.Apelido, pessoa.Nome, nascimento, stack ?? Array.Empty<string>());
 
-                return Results.AcceptedAtRoute("GetPessoaById", new { id });
+                await localChannel.Channel.Writer.WriteAsync(p);
+                await localSearchChannel.Channel.Writer.WriteAsync(p);
+                await persistenceChannel.Channel.Writer.WriteAsync(p);
+                
+                return Results.CreatedAtRoute("GetPessoaById", new RouteValueDictionary() { { "id", id } });
             })
-            .WithName("PostPessoas")
-            .WithOpenApi();
+            .WithName("PostPessoas");
 
             await app.RunAsync();
         }

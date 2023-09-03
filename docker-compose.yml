@@ -1,0 +1,59 @@
+version: '3.4'
+
+services:
+  db:
+    image: postgres:latest
+    environment:
+      - POSTGRES_PASSWORD=123
+      - POSTGRES_USER=admin
+      - POSTGRES_DB=rinha
+    ports:
+      - "5432:5432"
+    volumes:
+      - ./ddl.sql:/docker-entrypoint-initdb.d/ddl.sql
+    deploy:
+      resources:
+        limits:
+          cpus: '0.05'
+          memory: '0.4GB'
+
+  rinhabackend:
+    image: ${DOCKER_REGISTRY-}rinhabackend
+    build:
+      context: .
+      dockerfile: RinhaBackend/Dockerfile
+    depends_on:
+      - db
+    environment:
+      - DB_CONNECTION_STRING=Host=db;Username=admin;Password=123;Database=rinha;
+      - Logging__LogLevel__Default=Warning
+      - ASPNETCORE_URLS=http://+:80;https://+:443
+      - APP_NAME=api01
+      - GRPC_CHANNEL=https://rinhabackend/
+    expose:
+      - "80"
+    ports:
+      - "9999:80"
+    deploy:
+      resources:
+        limits:
+          cpus: '0.56'
+          memory: '1.0GB'
+  # nginx:
+  #   image: nginx:latest
+  #   volumes:
+  #     - ./nginx.conf:/etc/nginx/nginx.conf:ro
+  #   depends_on:
+  #     - rinhabackend
+  #   ports:
+  #     - "9999:9999"
+  #   deploy:
+  #     resources:
+  #       limits:
+  #         cpus: '0.2'
+  #         memory: '0.1GB'
+
+networks:
+  default:
+    driver: bridge
+    name: rinha

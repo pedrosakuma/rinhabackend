@@ -1,0 +1,24 @@
+syntax = "proto3";
+option csharp_namespace = "RinhaBackend.Grpc";
+
+import "google/protobuf/timestamp.proto";
+
+service Pessoas
+{
+	rpc	ReceivedPessoa (PessoaStreamRequest) returns (stream PessoaStreamResponse);
+}
+
+message PessoaStreamResponse
+{
+	string id = 1;
+	string apelido = 2;
+	string nome = 3;
+	google.protobuf.Timestamp nascimento = 4;
+	repeated string stack = 5;
+}
+
+
+message PessoaStreamRequest
+{
+	string source = 1;
+}
