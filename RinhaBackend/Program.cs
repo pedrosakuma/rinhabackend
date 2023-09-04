@@ -37,6 +37,7 @@ namespace RinhaBackend
             });
             builder.Services.AddSingleton<GrpcPessoasService>();
             builder.Services.AddSingleton<PessoasCacheRepository>();
+            builder.Services.AddSingleton<PessoasPersistedRepository>();
             builder.Services.AddSingleton(s => AppJsonSerializerContext.Default);
             builder.Services.AddSingleton((s) => new PersistencePessoasChannel(Channel.CreateUnbounded<Pessoa>(new UnboundedChannelOptions
             {
