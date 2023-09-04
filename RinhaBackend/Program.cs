@@ -81,9 +81,9 @@ namespace RinhaBackend
             .WithName("GetPessoas");
 
             app.MapGet("/contagem-pessoas", static (
-                [FromServices] PessoasCacheRepository cacheRepository) =>
+                [FromServices] PessoasPersistedRepository cacheRepository) =>
             {
-                return cacheRepository.Count();
+                return cacheRepository.CountAsync();
             })
             .WithName("GetContagemPessoas");
 

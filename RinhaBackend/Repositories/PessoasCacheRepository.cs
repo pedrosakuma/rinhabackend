@@ -56,10 +56,6 @@ namespace RinhaBackend.Repositories
             return pessoaJson;
         }
 
-        internal int Count()
-        {
-            return cacheById.Count;
-        }
         internal Pessoa[] Search(string criteria)
         {
             lock (patriciaSuffixTrie)
