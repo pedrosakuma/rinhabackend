@@ -6,15 +6,15 @@ namespace RinhaBackend.Repositories
 {
     public class PessoasCacheRepository
     {
-        private ConcurrentDictionary<Guid, List<TaskCompletionSource<byte[]>>> requests;
+        private ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>> requests;
         private ConcurrentDictionary<Guid, byte[]> cacheById;
         private ConcurrentDictionary<string, bool> cacheByApelido;
         private PatriciaSuffixTrie<Pessoa> patriciaSuffixTrie;
         public PessoasCacheRepository()
         {
-            requests = new ConcurrentDictionary<Guid, List<TaskCompletionSource<byte[]>>>(100, 1048576);
-            cacheById = new ConcurrentDictionary<Guid, byte[]>(100, 1048576);
-            cacheByApelido = new ConcurrentDictionary<string, bool>(100, 1048576);
+            requests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>(16, 1048576);
+            cacheById = new ConcurrentDictionary<Guid, byte[]>(4, 1048576);
+            cacheByApelido = new ConcurrentDictionary<string, bool>(4, 1048576);
             patriciaSuffixTrie = new PatriciaSuffixTrie<Pessoa>(1);
         }
 
@@ -22,9 +22,8 @@ namespace RinhaBackend.Repositories
         {
             cacheById.TryAdd(pessoa.Id, rawData);
             cacheByApelido.TryAdd(pessoa.Apelido, true);
-            if (requests.TryRemove(pessoa.Id, out List<TaskCompletionSource<byte[]>>? completions))
-                foreach (var completion in completions)
-                    completion.SetResult(rawData);
+            if (requests.TryRemove(pessoa.Id, out TaskCompletionSource<byte[]>? completion))
+                completion.SetResult(rawData);
         }
         internal void AddSearch(Pessoa pessoa)
         {
@@ -48,17 +47,10 @@ namespace RinhaBackend.Repositories
         {
             if (!cacheById.TryGetValue(id, out byte[]? pessoaJson))
             {
-                TaskCompletionSource<byte[]> completion = new TaskCompletionSource<byte[]>();
+                TaskCompletionSource<byte[]> completion = requests.GetOrAdd(id,
+                    k => new TaskCompletionSource<byte[]>());
                 CancellationTokenSource source = new CancellationTokenSource();
                 source.CancelAfter(timeSpan);
-                requests.AddOrUpdate(id,
-                    k => new List<TaskCompletionSource<byte[]>>(1) { completion },
-                    (k, l) =>
-                    {
-                        lock (l)
-                            l.Add(completion);
-                        return l;
-                    });
                 pessoaJson = await completion.Task.WaitAsync(source.Token);
             }
             return pessoaJson;

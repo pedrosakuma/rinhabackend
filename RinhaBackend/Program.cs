@@ -63,7 +63,7 @@ namespace RinhaBackend
                 [FromServices] PessoasCacheRepository cacheRepository, 
                 [FromRoute] Guid id) =>
             {
-                byte[]? pessoaJson = await cacheRepository.GetValueAsync(id, TimeSpan.FromMilliseconds(200));
+                byte[]? pessoaJson = await cacheRepository.GetValueAsync(id, TimeSpan.FromMilliseconds(500));
                 if (pessoaJson == null)
                     return Results.NotFound();
                 return Results.Bytes(pessoaJson, "application/json");
