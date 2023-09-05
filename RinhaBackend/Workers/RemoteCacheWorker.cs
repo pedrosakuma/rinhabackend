@@ -41,6 +41,7 @@ namespace RinhaBackend.Workers
                 }
                 catch (Exception e)
                 {
+                    logger.LogError("Exception on receive {e}", e);
                     await Task.Delay(1000);
                 }
             }

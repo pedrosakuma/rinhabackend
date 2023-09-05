@@ -1,9 +1,11 @@
 using Microsoft.AspNetCore.Mvc;
+using Microsoft.AspNetCore.ResponseCompression;
 using RinhaBackend.Grpc;
 using RinhaBackend.Models;
 using RinhaBackend.Repositories;
 using RinhaBackend.Services;
 using RinhaBackend.Workers;
+using System.IO.Compression;
 
 namespace RinhaBackend
 {
@@ -12,9 +14,17 @@ namespace RinhaBackend
         public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateSlimBuilder(args);
-            ThreadPool.SetMinThreads(4096, 4096);
             builder.WebHost.UseKestrelHttpsConfiguration();
 
+            //builder.Services.AddResponseCompression(options =>
+            //{
+            //    options.Providers.Add<GzipCompressionProvider>();
+            //});
+            //builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+            //{
+            //    options.Level = CompressionLevel.Fastest;
+            //}); 
+            
             builder.Services.AddGrpc();
             builder.Services.AddNpgsqlDataSource(builder.Configuration["DB_CONNECTION_STRING"]);
             builder.Services.ConfigureHttpJsonOptions(options =>
@@ -41,7 +51,6 @@ namespace RinhaBackend
 
             builder.Services.AddSingleton<GrpcPessoasService>();
 
-
             builder.Services.AddSingleton<PersistencePessoasChannel>();
             builder.Services.AddSingleton<LocalPessoasChannel>();
             builder.Services.AddSingleton<LocalSearchPessoasChannel>();
@@ -53,12 +62,13 @@ namespace RinhaBackend
 
             var app = builder.Build();
 
+            //app.UseResponseCompression();
             app.MapGrpcService<GrpcPessoasService>();
             app.MapGet("/pessoas/{id}", static async (
                 [FromServices] PessoasCacheRepository cacheRepository,
                 [FromRoute] Guid id) =>
             {
-                byte[]? pessoaJson = await cacheRepository.GetValueAsync(id, TimeSpan.FromMilliseconds(10000));
+                byte[]? pessoaJson = await cacheRepository.GetValueAsync(id, TimeSpan.FromSeconds(5));
                 if (pessoaJson == null)
                     return Results.NotFound();
                 return Results.Bytes(pessoaJson, "application/json");

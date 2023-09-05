@@ -45,30 +45,31 @@ namespace RinhaBackend.Repositories
 
         internal async Task<byte[]?> GetValueAsync(Guid id, TimeSpan timeSpan)
         {
-            if (!cacheById.TryGetValue(id, out byte[]? pessoaJson))
+            TaskCompletionSource<byte[]> completion = requests.GetOrAdd(id,
+                k => new TaskCompletionSource<byte[]>());
+            if (cacheById.TryGetValue(id, out byte[]? pessoaJson))
             {
-                TaskCompletionSource<byte[]> completion = requests.GetOrAdd(id,
-                    k => new TaskCompletionSource<byte[]>());
-                CancellationTokenSource source = new CancellationTokenSource();
-                source.CancelAfter(timeSpan);
+                requests.TryRemove(id, out _);
+            }
+            else
+            {
                 try
                 {
-                    pessoaJson = await completion.Task.WaitAsync(source.Token);
+                    pessoaJson = await completion.Task.WaitAsync(timeSpan);
                 }
-                catch (TaskCanceledException)
+                catch (TimeoutException)
                 {
-                    // timeout
+                    cacheById.TryGetValue(id, out pessoaJson);
                 }
             }
             return pessoaJson;
         }
 
-        internal Pessoa[] Search(string criteria)
+        internal IEnumerable<Pessoa> Search(string criteria)
         {
-            lock (patriciaSuffixTrie)
-            {
+            lock(patriciaSuffixTrie)
                 return patriciaSuffixTrie.Retrieve(criteria.ToLower()).Take(50).ToArray();
-            }
         }
     }
 }
+

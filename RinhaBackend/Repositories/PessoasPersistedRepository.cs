@@ -86,7 +86,7 @@ namespace RinhaBackend.Repositories
                     TRUNCATE pessoas_temp;
                     """;
                 await mergeAndTruncateTempCommand.ExecuteNonQueryAsync();
-                logger.LogWarning("Persisted {count}", pessoas.Count);
+                logger.LogInformation("Persisted {count}", pessoas.Count);
             }
             catch (Exception e)
             {

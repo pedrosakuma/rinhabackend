@@ -31,7 +31,6 @@ namespace RinhaBackend.Workers
             {
                 if (await reader.WaitToReadAsync(stoppingToken))
                 {
-
                     while (reader.TryRead(out var pessoa))
                     {
                         pessoas.Add(pessoa);
