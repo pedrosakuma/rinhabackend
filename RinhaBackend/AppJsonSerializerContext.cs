@@ -8,7 +8,7 @@ namespace RinhaBackend
     [JsonSerializable(typeof(Pessoa))]
     [JsonSerializable(typeof(Pessoa[]))]
     [JsonSerializable(typeof(Channel<Pessoa>))]
-    [JsonSerializable(typeof(int))]
+    [JsonSerializable(typeof(int?))]
     public partial class AppJsonSerializerContext : JsonSerializerContext
     {
 

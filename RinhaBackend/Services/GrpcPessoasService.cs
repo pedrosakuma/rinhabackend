@@ -1,5 +1,4 @@
-﻿using Google.Protobuf.Collections;
-using Google.Protobuf.WellKnownTypes;
+﻿using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using RinhaBackend.Grpc;
 using RinhaBackend.Models;
@@ -7,7 +6,7 @@ using System.Collections.Concurrent;
 
 namespace RinhaBackend.Services
 {
-    public class GrpcPessoasService : Grpc.Pessoas.PessoasBase
+    public sealed class GrpcPessoasService : Grpc.Pessoas.PessoasBase
     {
         private readonly ConcurrentDictionary<IServerStreamWriter<PessoaStreamResponse>, TaskCompletionSource> contexts;
         public GrpcPessoasService()

@@ -23,6 +23,6 @@
 		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
 		<PackageReference Include="Npgsql" Version="7.0.4" />
 		<PackageReference Include="Npgsql.DependencyInjection" Version="7.0.4" />
-		<PackageReference Include="TrieNet.Core" Version="1.0.4" />
+		<PackageReference Include="TrieNet2" Version="2.0.2" />
 	</ItemGroup>
 </Project>

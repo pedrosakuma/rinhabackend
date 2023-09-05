@@ -1,10 +1,7 @@
-﻿using MessagePack;
-using Npgsql;
-using NpgsqlTypes;
-using RinhaBackend.Models;
+﻿using RinhaBackend.Models;
 using RinhaBackend.Repositories;
 using RinhaBackend.Services;
-using System.Data;
+using System.Diagnostics;
 using System.Threading.Channels;
 
 namespace RinhaBackend.Workers
@@ -27,19 +24,26 @@ namespace RinhaBackend.Workers
         {
             var reader = channel.Reader;
             List<Pessoa> pessoas = new List<Pessoa>(1024);
+            await repository.ConnectAndPrepareAsync();
+            TimeSpan interval = TimeSpan.FromSeconds(1);
+            long timestamp = Stopwatch.GetTimestamp();
             while (!stoppingToken.IsCancellationRequested)
             {
-                await repository.ConnectAndPrepareAsync();
-
                 if (await reader.WaitToReadAsync(stoppingToken))
                 {
+
                     while (reader.TryRead(out var pessoa))
                     {
-                        await service.BroadcastAsync(pessoa);
                         pessoas.Add(pessoa);
+                        await service.BroadcastAsync(pessoa);
                     }
-                    await repository.BulkInsertAsync(pessoas);
-                    pessoas.Clear();
+                    if (Stopwatch.GetElapsedTime(timestamp) > interval
+                        || pessoas.Count > 128)
+                    {
+                        await repository.BulkInsertAsync(pessoas);
+                        pessoas.Clear();
+                        timestamp = Stopwatch.GetTimestamp();
+                    }
                 }
             }
         }

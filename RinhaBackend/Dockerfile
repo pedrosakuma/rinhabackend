@@ -6,7 +6,7 @@ EXPOSE 80
 
 FROM mcr.microsoft.com/dotnet/sdk:8.0-preview-alpine AS build
 RUN apk add --no-cache clang build-base zlib-dev libstdc++ grpc-plugins
-
+RUN dotnet dev-certs https -ep /https/aspnetapp.pfx -p password
 ARG PROTOBUF_PROTOC=/usr/bin/protoc
 ARG GRPC_PROTOC_PLUGIN=/usr/bin/grpc_csharp_plugin
 
@@ -19,4 +19,5 @@ RUN dotnet publish "RinhaBackend.csproj" -c Release -o /app/publish -r linux-mus
 FROM base AS final
 WORKDIR /app
 COPY --from=publish /app/publish .
+COPY --from=build /https/* /https/
 ENTRYPOINT ["./RinhaBackend"]

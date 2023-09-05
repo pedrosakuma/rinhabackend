@@ -1,10 +1,10 @@
-﻿using Gma.DataStructures.StringSearch;
-using RinhaBackend.Models;
+﻿using RinhaBackend.Models;
 using System.Collections.Concurrent;
+using TrieNet.PatriciaTrie;
 
 namespace RinhaBackend.Repositories
 {
-    public class PessoasCacheRepository
+    public sealed class PessoasCacheRepository
     {
         private ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>> requests;
         private ConcurrentDictionary<Guid, byte[]> cacheById;
@@ -51,7 +51,14 @@ namespace RinhaBackend.Repositories
                     k => new TaskCompletionSource<byte[]>());
                 CancellationTokenSource source = new CancellationTokenSource();
                 source.CancelAfter(timeSpan);
-                pessoaJson = await completion.Task.WaitAsync(source.Token);
+                try
+                {
+                    pessoaJson = await completion.Task.WaitAsync(source.Token);
+                }
+                catch (TaskCanceledException)
+                {
+                    // timeout
+                }
             }
             return pessoaJson;
         }

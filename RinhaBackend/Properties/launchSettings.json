@@ -5,13 +5,9 @@
       "launchBrowser": true,
       "launchUrl": "swagger",
       "environmentVariables": {
-        "ASPNETCORE_URLS": "http://+;https://+",
-        "ASPNETCORE_HTTPS_PORT": "9443",
-        "ASPNETCORE_HTTP_PORT": "9999",
-        "ASPNETCORE_Kestrel__Certificates__Default__Password": "password",
-        "ASPNETCORE_Kestrel__Certificates__Default__Path": "/mnt/c/Users/pedrotravi/.aspnet/https/aspnetapp.pfx",
+        "ASPNETCORE_URLS": "http://+:9999;https://+:9443",
         "ASPNETCORE_ENVIRONMENT": "Development",
-        "DB_CONNECTION_STRING": "Host=localhost;Username=postgres;Password=;",
+        "DB_CONNECTION_STRING": "Host=localhost;Username=postgres;Password=password;",
         "GRPC_CHANNEL": "https://localhost:9443",
         "APP_NAME": "app01"
       },

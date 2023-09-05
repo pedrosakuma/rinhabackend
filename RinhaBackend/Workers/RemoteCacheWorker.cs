@@ -1,7 +1,5 @@
 ﻿using RinhaBackend.Grpc;
 using RinhaBackend.Models;
-using RinhaBackend.Repositories;
-using System.Text.Json;
 using System.Threading.Channels;
 
 namespace RinhaBackend.Workers
@@ -41,7 +39,7 @@ namespace RinhaBackend.Workers
                             current.Stack.ToArray()));
                     }
                 }
-                catch(Exception e)
+                catch (Exception e)
                 {
                     await Task.Delay(1000);
                 }

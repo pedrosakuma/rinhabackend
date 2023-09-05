@@ -4,7 +4,6 @@ using RinhaBackend.Models;
 using RinhaBackend.Repositories;
 using RinhaBackend.Services;
 using RinhaBackend.Workers;
-using System.Threading.Channels;
 
 namespace RinhaBackend
 {
@@ -13,7 +12,7 @@ namespace RinhaBackend
         public static async Task Main(string[] args)
         {
             var builder = WebApplication.CreateSlimBuilder(args);
-            //ThreadPool.SetMinThreads(1024, 1024);
+            ThreadPool.SetMinThreads(4096, 4096);
             builder.WebHost.UseKestrelHttpsConfiguration();
 
             builder.Services.AddGrpc();
@@ -35,22 +34,17 @@ namespace RinhaBackend
 
                 return handler;
             });
-            builder.Services.AddSingleton<GrpcPessoasService>();
-            builder.Services.AddSingleton<PessoasCacheRepository>();
-            builder.Services.AddSingleton<PessoasPersistedRepository>();
             builder.Services.AddSingleton(s => AppJsonSerializerContext.Default);
-            builder.Services.AddSingleton((s) => new PersistencePessoasChannel(Channel.CreateUnbounded<Pessoa>(new UnboundedChannelOptions
-            {
-                SingleReader = true
-            })));
-            builder.Services.AddSingleton((s) => new LocalPessoasChannel(Channel.CreateUnbounded<Pessoa>(new UnboundedChannelOptions
-            {
-                SingleReader = true
-            })));
-            builder.Services.AddSingleton((s) => new LocalSearchPessoasChannel(Channel.CreateUnbounded<Pessoa>(new UnboundedChannelOptions
-            {
-                SingleReader = true
-            })));
+
+            builder.Services.AddTransient<PessoasPersistedRepository>();
+            builder.Services.AddSingleton<PessoasCacheRepository>();
+
+            builder.Services.AddSingleton<GrpcPessoasService>();
+
+
+            builder.Services.AddSingleton<PersistencePessoasChannel>();
+            builder.Services.AddSingleton<LocalPessoasChannel>();
+            builder.Services.AddSingleton<LocalSearchPessoasChannel>();
 
             builder.Services.AddHostedService<LocalCacheWorker>();
             builder.Services.AddHostedService<LocalSearchCacheWorker>();
@@ -61,10 +55,10 @@ namespace RinhaBackend
 
             app.MapGrpcService<GrpcPessoasService>();
             app.MapGet("/pessoas/{id}", static async (
-                [FromServices] PessoasCacheRepository cacheRepository, 
+                [FromServices] PessoasCacheRepository cacheRepository,
                 [FromRoute] Guid id) =>
             {
-                byte[]? pessoaJson = await cacheRepository.GetValueAsync(id, TimeSpan.FromMilliseconds(500));
+                byte[]? pessoaJson = await cacheRepository.GetValueAsync(id, TimeSpan.FromMilliseconds(10000));
                 if (pessoaJson == null)
                     return Results.NotFound();
                 return Results.Bytes(pessoaJson, "application/json");
@@ -72,7 +66,7 @@ namespace RinhaBackend
             .WithName("GetPessoaById");
 
             app.MapGet("/pessoas", static (
-                [FromServices] PessoasCacheRepository cacheRepository, 
+                [FromServices] PessoasCacheRepository cacheRepository,
                 [FromQuery] string? t) =>
             {
                 if (t == null)
@@ -91,23 +85,24 @@ namespace RinhaBackend
             app.MapPost("/pessoas", static async (
                 [FromServices] LocalPessoasChannel localChannel,
                 [FromServices] LocalSearchPessoasChannel localSearchChannel,
-                [FromServices] PersistencePessoasChannel persistenceChannel, 
-                [FromServices] PessoasCacheRepository cacheRepository, 
+                [FromServices] PersistencePessoasChannel persistenceChannel,
+                [FromServices] PessoasCacheRepository cacheRepository,
                 [FromBody] CreateRequestPessoa pessoa) =>
             {
                 string[]? stack = null;
                 if (!DateOnly.TryParseExact(pessoa.Nascimento, "yyyy-MM-dd", out DateOnly nascimento)
-                || (pessoa.Stack != null && !pessoa.Stack.TryGetValue(out stack))
                 || cacheRepository.Exists(pessoa.Apelido))
                     return Results.UnprocessableEntity();
 
+                if (pessoa.Stack != null)
+                    pessoa.Stack.TryGetValue(out stack);
                 var id = Guid.NewGuid();
                 var p = new Pessoa(id, pessoa.Apelido, pessoa.Nome, nascimento, stack ?? Array.Empty<string>());
 
                 await localChannel.Channel.Writer.WriteAsync(p);
                 await localSearchChannel.Channel.Writer.WriteAsync(p);
                 await persistenceChannel.Channel.Writer.WriteAsync(p);
-                
+
                 return Results.CreatedAtRoute("GetPessoaById", new RouteValueDictionary() { { "id", id } });
             })
             .WithName("PostPessoas");

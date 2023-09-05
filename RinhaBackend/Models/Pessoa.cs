@@ -1,6 +1,4 @@
-﻿using MessagePack;
-
-namespace RinhaBackend.Models
+﻿namespace RinhaBackend.Models
 {
     public record Pessoa(Guid Id, string Apelido, string Nome, DateOnly Nascimento, string[] Stack);
 }
