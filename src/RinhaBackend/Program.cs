@@ -9,6 +9,7 @@ using System.Buffers;
 using System.IO.Compression;
 using System.Runtime;
 using System.Text.Json;
+using System.Text.Json.Nodes;
 
 namespace RinhaBackend
 {
@@ -134,9 +135,9 @@ namespace RinhaBackend
                 || cacheRepository.Exists(pessoa.Apelido))
                     return Results.UnprocessableEntity();
 
-                if (pessoa.Stack != null)
+                if (pessoa.Stack != null && pessoa.Stack is JsonArray jsonArrayStack)
                 {
-                    stack = pessoa.Stack
+                    stack = jsonArrayStack
                         .Where(node => node.GetValueKind() == JsonValueKind.String)
                         .Select(node => node.GetValue<string>())
                         .ToArray();

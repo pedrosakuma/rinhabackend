@@ -11,7 +11,8 @@
         "DB_CONNECTION_STRING": "Host=localhost;Username=postgres;Password=password;",
         "GRPC_CHANNEL": "https://localhost:9443",
         "APP_NAME": "app01",
-        "DOTNET_gcServer": "1"
+        "DOTNET_gcServer": "1",
+        "DOTNET_gcConcurrent": "1"
       },
       "dotnetRunMessages": true,
       "applicationUrl": "http://localhost:9999"

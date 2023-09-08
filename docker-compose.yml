@@ -34,6 +34,7 @@ services:
       - DOTNET_GCHighMemPercent=61 
       - APP_NAME=api01
       - DOTNET_gcServer=1
+      - DOTNET_gcConcurrent=1
       - GRPC_CHANNEL=https://api02:8443
     deploy:
       resources:
@@ -56,6 +57,7 @@ services:
       - DOTNET_GCHighMemPercent=61 
       - APP_NAME=api02
       - DOTNET_gcServer=1
+      - DOTNET_gcConcurrent=1
       - GRPC_CHANNEL=https://api01:8443
     deploy:
       resources:
