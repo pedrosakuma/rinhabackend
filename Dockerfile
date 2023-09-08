@@ -5,10 +5,10 @@ ARG PROTOBUF_PROTOC=/usr/bin/protoc
 ARG GRPC_PROTOC_PLUGIN=/usr/bin/grpc_csharp_plugin
 
 WORKDIR /src
-COPY "src/RinhaBackend" .
+COPY src .
 
 FROM build AS publish
-RUN dotnet publish "RinhaBackend.csproj" -c Release -o /app/publish -r linux-musl-x64 --self-contained
+RUN dotnet publish "RinhaBackend/RinhaBackend.csproj" -c Release -o /app/publish -r linux-musl-x64 --self-contained
 
 FROM alpine AS final
 RUN apk add --no-cache libstdc++

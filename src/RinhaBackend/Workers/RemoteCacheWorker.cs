@@ -6,32 +6,33 @@ namespace RinhaBackend.Workers
 {
     public class RemoteCacheWorker : BackgroundService
     {
-        private readonly Channel<Pessoa> channel;
         private readonly ILogger<RemoteCacheWorker> logger;
+        private readonly LocalPessoasChannel channel;
         private readonly Pessoas.PessoasClient pessoasClient;
-        private readonly string appName;
+        private readonly string? appName;
 
         public RemoteCacheWorker(ILogger<RemoteCacheWorker> logger, LocalPessoasChannel channel, Pessoas.PessoasClient pessoasClient, IConfiguration configuration)
         {
-            this.channel = channel.Channel;
             this.logger = logger;
+            this.channel = channel;
             this.pessoasClient = pessoasClient;
             this.appName = configuration["APP_NAME"];
         }
         protected override async Task ExecuteAsync(CancellationToken stoppingToken)
         {
-            var writer = channel.Writer;
+            var cacheWriter = channel.Channel.Writer;
             while (!stoppingToken.IsCancellationRequested)
             {
                 try
                 {
                     var streaming = pessoasClient.ReceivedPessoa(new PessoaStreamRequest { Source = appName }, cancellationToken: stoppingToken);
                     var responseStream = streaming.ResponseStream;
+                    logger.LogWarning("Connected to GRPC pair");
                     while (await responseStream.MoveNext(stoppingToken))
                     {
                         var current = responseStream.Current;
                         Guid.TryParse(current.Id, out Guid id);
-                        await writer.WriteAsync(new Pessoa(
+                        await cacheWriter.WriteAsync(new Pessoa(
                             id,
                             current.Apelido,
                             current.Nome,
@@ -41,7 +42,7 @@ namespace RinhaBackend.Workers
                 }
                 catch (Exception e)
                 {
-                    logger.LogError("Exception on receive {e}", e);
+                    logger.LogWarning("Connecting to GRPC pair");
                     await Task.Delay(1000);
                 }
             }

@@ -26,8 +26,11 @@ namespace RinhaBackend.Workers
                 {
                     var pessoa = await reader.ReadAsync(stoppingToken);
                     if (pessoa != null)
-                        pessoasCacheRepository.Add(pessoa,
-                            JsonSerializer.SerializeToUtf8Bytes(pessoa, jsonSerializerContext.Pessoa));
+                    {
+                        byte[] serialized = JsonSerializer.SerializeToUtf8Bytes(pessoa, jsonSerializerContext.Pessoa);
+                        pessoasCacheRepository.Add(pessoa, serialized);
+                        pessoasCacheRepository.AddSearch(pessoa, serialized);
+                    }
                 }
             }
         }

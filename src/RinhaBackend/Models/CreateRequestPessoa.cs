@@ -2,5 +2,5 @@
 
 namespace RinhaBackend.Models
 {
-    public record CreateRequestPessoa(string Apelido, string Nome, string Nascimento, JsonValue Stack);
+    public record CreateRequestPessoa(string Apelido, string Nome, string Nascimento, JsonArray Stack);
 }

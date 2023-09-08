@@ -1,21 +1,24 @@
-﻿using RinhaBackend.Models;
+﻿using RinhaBackend.Collections;
+using RinhaBackend.Models;
 using System.Collections.Concurrent;
-using TrieNet.PatriciaTrie;
+using System.Text;
 
 namespace RinhaBackend.Repositories
 {
     public sealed class PessoasCacheRepository
     {
-        private ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>> requests;
-        private ConcurrentDictionary<Guid, byte[]> cacheById;
-        private ConcurrentDictionary<string, bool> cacheByApelido;
-        private PatriciaSuffixTrie<Pessoa> patriciaSuffixTrie;
+        private readonly ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>> requests;
+        private readonly ConcurrentDictionary<Guid, byte[]> cacheById;
+        private readonly ConcurrentDictionary<string, bool> cacheByApelido;
+        private readonly AppendOnlyTextSearch<byte[]> search;
+
+        //private PatriciaSuffixTrie<Pessoa> patriciaSuffixTrie;
         public PessoasCacheRepository()
         {
-            requests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>(16, 1048576);
-            cacheById = new ConcurrentDictionary<Guid, byte[]>(4, 1048576);
-            cacheByApelido = new ConcurrentDictionary<string, bool>(4, 1048576);
-            patriciaSuffixTrie = new PatriciaSuffixTrie<Pessoa>(1);
+            requests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>(16, 131072);
+            cacheById = new ConcurrentDictionary<Guid, byte[]>(4, 131072);
+            cacheByApelido = new ConcurrentDictionary<string, bool>(4, 131072);
+            search = new AppendOnlyTextSearch<byte[]>(131072);
         }
 
         internal void Add(Pessoa pessoa, byte[] rawData)
@@ -25,17 +28,24 @@ namespace RinhaBackend.Repositories
             if (requests.TryRemove(pessoa.Id, out TaskCompletionSource<byte[]>? completion))
                 completion.SetResult(rawData);
         }
-        internal void AddSearch(Pessoa pessoa)
+        internal void AddSearch(Pessoa pessoa, byte[] serialized)
         {
-            lock (patriciaSuffixTrie)
+            var length = pessoa.Apelido.Length + pessoa.Nome.Length + pessoa.Stack.Sum(s => s.Length) + 2 + pessoa.Stack.Length - 1;
+            byte[] s = new byte[length];
+
+            int index = 0;
+            Encoding.ASCII.GetBytes(pessoa.Apelido.ToLower(), s.AsSpan(index));
+            index += pessoa.Apelido.Length + 1;
+
+            Encoding.ASCII.GetBytes(pessoa.Nome.ToLower(), s.AsSpan(index));
+            index += pessoa.Nome.Length + 1;
+
+            foreach (var stack in pessoa.Stack)
             {
-                patriciaSuffixTrie.Add(pessoa.Apelido.ToLower(), pessoa);
-                patriciaSuffixTrie.Add(pessoa.Nome.ToLower(), pessoa);
-                foreach (var s in pessoa.Stack)
-                {
-                    patriciaSuffixTrie.Add(s.ToLower(), pessoa);
-                }
+                Encoding.ASCII.GetBytes(stack.ToLower(), s.AsSpan(index));
+                index += stack.Length + 1;
             }
+            search.Add(s, serialized);
         }
 
         internal bool Exists(string apelido)
@@ -57,19 +67,14 @@ namespace RinhaBackend.Repositories
                 {
                     pessoaJson = await completion.Task.WaitAsync(timeSpan);
                 }
-                catch (TimeoutException)
-                {
-                    cacheById.TryGetValue(id, out pessoaJson);
-                }
+                catch (TimeoutException) { }
             }
             return pessoaJson;
         }
 
-        internal IEnumerable<Pessoa> Search(string criteria)
+        internal int Search(string criteria, Span<byte[]> result)
         {
-            lock(patriciaSuffixTrie)
-                return patriciaSuffixTrie.Retrieve(criteria.ToLower()).Take(50).ToArray();
+            return search.Search(criteria.ToLower(), result);
         }
     }
 }
-

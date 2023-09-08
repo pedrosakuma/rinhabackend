@@ -6,6 +6,7 @@
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
 		<PublishAot>true</PublishAot>
+		<OptimizationPreference>Speed</OptimizationPreference>
 		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 		<DockerComposeProjectPath>..\docker-compose.dcproj</DockerComposeProjectPath>
 	</PropertyGroup>
@@ -23,6 +24,5 @@
 		<PackageReference Include="Microsoft.VisualStudio.Azure.Containers.Tools.Targets" Version="1.19.5" />
 		<PackageReference Include="Npgsql" Version="7.0.4" />
 		<PackageReference Include="Npgsql.DependencyInjection" Version="7.0.4" />
-		<PackageReference Include="TrieNet2" Version="2.0.2" />
 	</ItemGroup>
 </Project>

@@ -51,9 +51,11 @@ namespace RinhaBackend.Repositories
                         );
                         """;
                     command.ExecuteNonQuery();
+                    logger.LogWarning("Connected to Postgres");
                 }
                 catch
                 {
+                    logger.LogWarning("Connecting to Postgres");
                     await Task.Delay(1000);
                 }
             }

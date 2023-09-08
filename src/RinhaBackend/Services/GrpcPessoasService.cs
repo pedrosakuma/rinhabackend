@@ -2,16 +2,15 @@
 using Grpc.Core;
 using RinhaBackend.Grpc;
 using RinhaBackend.Models;
-using System.Collections.Concurrent;
 
 namespace RinhaBackend.Services
 {
     public sealed class GrpcPessoasService : Grpc.Pessoas.PessoasBase
     {
-        private readonly ConcurrentDictionary<IServerStreamWriter<PessoaStreamResponse>, TaskCompletionSource> contexts;
+        private readonly Dictionary<IServerStreamWriter<PessoaStreamResponse>, TaskCompletionSource> contexts;
         public GrpcPessoasService()
         {
-            contexts = new ConcurrentDictionary<IServerStreamWriter<PessoaStreamResponse>, TaskCompletionSource>();
+            contexts = new Dictionary<IServerStreamWriter<PessoaStreamResponse>, TaskCompletionSource>(1);
         }
         public async Task BroadcastAsync(Pessoa pessoa)
         {
@@ -37,14 +36,18 @@ namespace RinhaBackend.Services
         {
             var completion = new TaskCompletionSource();
             context.CancellationToken.Register(() => completion.SetCanceled());
-            contexts.GetOrAdd(responseStream, completion);
+            lock (contexts)
+            {
+                contexts.Add(responseStream, completion);
+            }
             try
             {
                 await completion.Task;
             }
             finally
             {
-                contexts.Remove(responseStream, out _);
+                lock (contexts)
+                    contexts.Remove(responseStream, out _);
             }
         }
     }
