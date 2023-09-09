@@ -5,7 +5,7 @@
 		<RuntimeIdentifiers>win-x64;linux-musl-x64</RuntimeIdentifiers>
 		<Nullable>enable</Nullable>
 		<ImplicitUsings>enable</ImplicitUsings>
-		<PublishAot>true</PublishAot>
+		<PublishAot>false</PublishAot>
 		<OptimizationPreference>Speed</OptimizationPreference>
 		<DockerDefaultTargetOS>Linux</DockerDefaultTargetOS>
 		<DockerComposeProjectPath>..\docker-compose.dcproj</DockerComposeProjectPath>

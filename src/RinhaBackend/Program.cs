@@ -7,6 +7,7 @@ using RinhaBackend.Services;
 using RinhaBackend.Workers;
 using System.Buffers;
 using System.IO.Compression;
+using System.IO.Pipelines;
 using System.Runtime;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -24,16 +25,14 @@ namespace RinhaBackend
             var builder = WebApplication.CreateSlimBuilder(args);
             builder.WebHost.UseKestrelHttpsConfiguration();
 
-            GCSettings.LatencyMode = GCLatencyMode.SustainedLowLatency;
-
-            builder.Services.AddResponseCompression(options =>
-            {
-                options.Providers.Add<GzipCompressionProvider>();
-            });
-            builder.Services.Configure<GzipCompressionProviderOptions>(options =>
-            {
-                options.Level = CompressionLevel.Fastest;
-            });
+            //builder.Services.AddResponseCompression(options =>
+            //{
+            //    options.Providers.Add<GzipCompressionProvider>();
+            //});
+            //builder.Services.Configure<GzipCompressionProviderOptions>(options =>
+            //{
+            //    options.Level = CompressionLevel.Fastest;
+            //});
 
             builder.Services.AddGrpc();
             builder.Services.AddNpgsqlDataSource(builder.Configuration["DB_CONNECTION_STRING"]);
@@ -71,7 +70,7 @@ namespace RinhaBackend
             var app = builder.Build();
 
             app.MapGrpcService<GrpcPessoasService>();
-            app.UseResponseCompression();
+            //app.UseResponseCompression();
             app.MapGet("/pessoas/{id}", static async (
                 [FromServices] PessoasCacheRepository cacheRepository,
                 [FromRoute] Guid id) =>
@@ -84,15 +83,13 @@ namespace RinhaBackend
             .WithName("GetPessoaById");
 
             app.MapGet("/pessoas", static (
-                [FromServices] AppJsonSerializerContext jsonContext,
                 [FromServices] PessoasCacheRepository cacheRepository,
-                HttpContext context,
                 [FromQuery] string? t) =>
             {
                 if (t == null)
                     return Results.BadRequest();
-
-                return Results.Stream(async s => {
+                return Results.Stream(async s =>
+                {
                     byte[][] results = ArrayPool<byte[]>.Shared.Rent(50);
                     try
                     {
@@ -124,13 +121,13 @@ namespace RinhaBackend
             })
             .WithName("GetContagemPessoas");
 
-            app.MapPost("/pessoas", static async (
+            app.MapPost("/pessoas", static (
                 [FromServices] LocalPessoasChannel localChannel,
                 [FromServices] PersistencePessoasChannel persistenceChannel,
                 [FromServices] PessoasCacheRepository cacheRepository,
                 [FromBody] CreateRequestPessoa pessoa) =>
             {
-                string[] stack = null;
+                string[] stack = Array.Empty<string>();
                 if (!DateOnly.TryParseExact(pessoa.Nascimento, "yyyy-MM-dd", out DateOnly nascimento)
                 || cacheRepository.Exists(pessoa.Apelido))
                     return Results.UnprocessableEntity();
@@ -143,15 +140,16 @@ namespace RinhaBackend
                         .ToArray();
                 }
                 var id = Guid.NewGuid();
-                var p = new Pessoa(id, pessoa.Apelido, pessoa.Nome, nascimento, stack ?? Array.Empty<string>());
+                var p = new Pessoa(id, pessoa.Apelido, pessoa.Nome, nascimento, stack);
 
-                await localChannel.Channel.Writer.WriteAsync(p);
-                await persistenceChannel.Channel.Writer.WriteAsync(p);
+                localChannel.Channel.Writer.TryWrite(p);
+                persistenceChannel.Channel.Writer.TryWrite(p);
 
                 return Results.CreatedAtRoute("GetPessoaById", new RouteValueDictionary() { { "id", id } });
             })
             .WithName("PostPessoas");
 
+            GC.TryStartNoGCRegion(920125440);
             await app.RunAsync();
         }
     }

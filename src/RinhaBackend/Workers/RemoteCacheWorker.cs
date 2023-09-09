@@ -1,6 +1,5 @@
 ﻿using RinhaBackend.Grpc;
 using RinhaBackend.Models;
-using System.Threading.Channels;
 
 namespace RinhaBackend.Workers
 {

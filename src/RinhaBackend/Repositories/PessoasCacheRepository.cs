@@ -12,7 +12,6 @@ namespace RinhaBackend.Repositories
         private readonly ConcurrentDictionary<string, bool> cacheByApelido;
         private readonly AppendOnlyTextSearch<byte[]> search;
 
-        //private PatriciaSuffixTrie<Pessoa> patriciaSuffixTrie;
         public PessoasCacheRepository()
         {
             requests = new ConcurrentDictionary<Guid, TaskCompletionSource<byte[]>>(16, 131072);
@@ -28,23 +27,26 @@ namespace RinhaBackend.Repositories
             if (requests.TryRemove(pessoa.Id, out TaskCompletionSource<byte[]>? completion))
                 completion.SetResult(rawData);
         }
+
         internal void AddSearch(Pessoa pessoa, byte[] serialized)
         {
             var length = pessoa.Apelido.Length + pessoa.Nome.Length + pessoa.Stack.Sum(s => s.Length) + 2 + pessoa.Stack.Length - 1;
             byte[] s = new byte[length];
-
+            
             int index = 0;
-            Encoding.ASCII.GetBytes(pessoa.Apelido.ToLower(), s.AsSpan(index));
-            index += pessoa.Apelido.Length + 1;
+            int bytesWritten;
+            Ascii.FromUtf16(pessoa.Apelido, s.AsSpan(index), out bytesWritten);
+            index += bytesWritten + 1;
 
-            Encoding.ASCII.GetBytes(pessoa.Nome.ToLower(), s.AsSpan(index));
-            index += pessoa.Nome.Length + 1;
+            Ascii.FromUtf16(pessoa.Nome, s.AsSpan(index), out bytesWritten);
+            index += bytesWritten + 1;
 
             foreach (var stack in pessoa.Stack)
             {
-                Encoding.ASCII.GetBytes(stack.ToLower(), s.AsSpan(index));
-                index += stack.Length + 1;
+                Ascii.FromUtf16(stack, s.AsSpan(index), out bytesWritten);
+                index += bytesWritten + 1;
             }
+            Ascii.ToLowerInPlace(s, out _);
             search.Add(s, serialized);
         }
 
@@ -74,7 +76,7 @@ namespace RinhaBackend.Repositories
 
         internal int Search(string criteria, Span<byte[]> result)
         {
-            return search.Search(criteria.ToLower(), result);
+            return search.Search(criteria, result);
         }
     }
 }
